@@ -1,0 +1,158 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Flashcards Pro 3.0</title>
+<style>
+body{font-family:-apple-system,sans-serif;background:#111;color:#fff;max-width:1000px;margin:auto;padding:16px}
+.card{background:#1c1c1e;border-radius:18px;padding:16px;margin:12px 0}
+.big{font-size:34px;font-weight:700;text-align:center;padding:30px}
+.answer{font-size:28px;text-align:center}
+button,input,select{padding:10px;border-radius:10px;margin:4px}
+</style>
+</head>
+<body>
+<h1>Flashcards Pro 3.0</h1>
+
+<div class="card">
+<select id="direction">
+<option value="vn-en">Vietnamese → English</option>
+<option value="en-vn">English → Vietnamese</option>
+</select>
+<select id="timer"><option>3</option><option>5</option><option selected>6</option><option>10</option><option>15</option><option>30</option></select>
+<select id="mode"><option value="reveal">Auto Reveal</option><option value="next">Auto Next</option></select>
+<button onclick="toggleTheme()">Theme</button>
+</div>
+
+<div class="card">
+<div id="q" class="big">Add cards to start</div>
+<div id="count" style="text-align:center"></div>
+<div id="a" class="answer" hidden></div>
+<div style="text-align:center">
+<button onclick="nextCard()">Next</button>
+<button onclick="mark(1)">👍 Knew</button>
+<button onclick="mark(0)">👎 Didn't know</button>
+<button onclick="speakAnswer()">🔊 Speak</button>
+</div>
+</div>
+
+<div class="card">
+<input id="vn" placeholder="Vietnamese">
+<input id="en" placeholder="English">
+<input id="tag" placeholder="Tag">
+<button onclick="addCard()">Add</button>
+</div>
+
+<div class="card">
+<input type="file" id="csv">
+<button onclick="exportData()">Export Backup</button>
+<div id="stats"></div>
+</div>
+
+<script>
+let cards=JSON.parse(localStorage.getItem("fc3")||"[]");
+let current,t;
+
+function save(){localStorage.setItem("fc3",JSON.stringify(cards));stats();}
+
+function addCard(){
+ if(!vn.value||!en.value) return;
+ cards.push({vn:vn.value,en:en.value,tag:tag.value,box:1,known:0,unknown:0});
+ save(); vn.value=""; en.value=""; tag.value="";
+}
+
+function chooseCard(){
+ let weighted=[];
+ cards.forEach(c=>{
+   let w=Math.max(1,8-c.box);
+   for(let i=0;i<w;i++) weighted.push(c);
+ });
+ return weighted[Math.floor(Math.random()*weighted.length)];
+}
+
+function nextCard(){
+ if(!cards.length) return;
+ clearInterval(t);
+ current=chooseCard();
+ let dir=direction.value;
+ q.innerText=dir==="vn-en"?current.vn:current.en;
+ a.innerText=dir==="vn-en"?current.en:current.vn;
+ a.hidden=true;
+
+ let sec=parseInt(timer.value);
+ count.innerText="⏱️ "+sec;
+ t=setInterval(()=>{
+   sec--;
+   count.innerText="⏱️ "+sec;
+   if(sec<=0){
+      clearInterval(t);
+      a.hidden=false;
+      if(mode.value==="next") setTimeout(nextCard,2000);
+   }
+ },1000);
+}
+
+function mark(ok){
+ if(!current) return;
+ if(ok){
+   current.known++;
+   current.box=Math.min(7,current.box+1);
+ }else{
+   current.unknown++;
+   current.box=1;
+ }
+ save();
+}
+
+function speakAnswer(){
+ if(!current) return;
+ let txt=a.innerText;
+ let u=new SpeechSynthesisUtterance(txt);
+ u.lang="en-US";
+ speechSynthesis.speak(u);
+}
+
+function stats(){
+ let total=cards.length;
+ let k=cards.reduce((x,c)=>x+c.known,0);
+ let u=cards.reduce((x,c)=>x+c.unknown,0);
+ let acc=(k+u)?((k/(k+u))*100).toFixed(1):0;
+ stats.innerHTML=`Cards: ${total}<br>Accuracy: ${acc}%`;
+}
+
+csv.onchange=e=>{
+ let f=e.target.files[0];
+ let r=new FileReader();
+ r.onload=()=>{
+   r.result.split(/\r?\n/).slice(1).forEach(line=>{
+      let [vn,en,tag=""]=line.split(",");
+      if(!vn||!en) return;
+      if(cards.some(c=>c.vn===vn && c.en===en)) return;
+      cards.push({vn,en,tag,box:1,known:0,unknown:0});
+   });
+   save();
+ };
+ r.readAsText(f);
+};
+
+function exportData(){
+ let blob=new Blob([JSON.stringify(cards)],{type:"application/json"});
+ let aTag=document.createElement("a");
+ aTag.href=URL.createObjectURL(blob);
+ aTag.download="flashcards_backup.json";
+ aTag.click();
+}
+
+function toggleTheme(){
+ document.body.style.background =
+ document.body.style.background==="white" ? "#111" : "white";
+ document.body.style.color =
+ document.body.style.color==="black" ? "white" : "black";
+}
+
+stats();
+</script>
+</body>
+</html>
